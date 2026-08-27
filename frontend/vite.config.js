@@ -228,6 +228,13 @@ const config = {
 						{
 							name: 'icons-barrel',
 							test: /[\\/]src[\\/]lib[\\/]components[\\/]icons[\\/](index|store)\.ts/
+						},
+						// Session/store/navigation helpers every route boots through.
+						// Left alone they split into ~15 sub-1KB chunks, and on HTTP/1.1
+						// the request count costs more round trips than the bytes.
+						{
+							name: 'boot-helpers',
+							test: /[\\/]src[\\/]lib[\\/](navigation|serializeParam|logout|logoutKit|logoutRedirect|enterpriseUtils|darkModeVariant|refreshUser|user|storeUtils|stores|toast|forLater|forkParentMemory|workspaceProtectionRules|lastLoginMethod|cookies|consts)\.ts$/
 						}
 					]
 				}
