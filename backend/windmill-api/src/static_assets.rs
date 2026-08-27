@@ -176,6 +176,12 @@ fn serve_path(
                 res = res.header(header::CACHE_CONTROL, "max-age=31536000");
             } else if (mime.type_()) == (mime::IMAGE) || (mime.type_()) == (mime::FONT) {
                 res = res.header(header::CACHE_CONTROL, "max-age=31536000");
+            } else if (mime.type_(), mime.subtype()) == (mime::TEXT, mime::HTML) {
+                // Short freshness window: repeat visits within it skip the
+                // round trip for the SPA shell while still picking up new
+                // deployments quickly (SvelteKit also force-reloads on a
+                // version change when a chunk 404s).
+                res = res.header(header::CACHE_CONTROL, "max-age=60");
             } else {
                 res = res.header(header::CACHE_CONTROL, "no-cache, no-store, must-revalidate");
             }
