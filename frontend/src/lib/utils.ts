@@ -7,7 +7,6 @@
 // import { get } from 'svelte/store'
 
 import { deepEqual } from 'fast-equals'
-import YAML from 'yaml'
 import { type UserExt } from './stores'
 import { sendUserToast } from './toast'
 import type { CompletedJob, Job, RunnableKind, Script, ScriptLang, Retry } from './gen'
@@ -1481,27 +1480,6 @@ export function orderedJsonStringify(obj: any, space?: string | number) {
 		(key, value) => (value != undefined && value != null && allKeys.add(key), value)
 	)
 	return JSON.stringify(obj, (Array.from(allKeys) as string[]).sort(), space)
-}
-
-function sortObjectKeys(obj: any): any {
-	if (obj && typeof obj === 'object' && !Array.isArray(obj)) {
-		const sortedObj: any = {}
-		Object.keys(obj)
-			.sort()
-			.forEach((key) => {
-				sortedObj[key] = sortObjectKeys(obj[key])
-			})
-		return sortedObj
-	} else if (Array.isArray(obj)) {
-		return obj.map((item) => sortObjectKeys(item))
-	} else {
-		return obj
-	}
-}
-
-export function orderedYamlStringify(obj: any) {
-	const sortedObj = sortObjectKeys(obj)
-	return YAML.stringify(sortedObj)
 }
 
 function evalJs(expr: string) {

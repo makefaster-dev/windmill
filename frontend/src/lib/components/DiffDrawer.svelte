@@ -7,10 +7,10 @@
 	import {
 		cleanValueProperties,
 		orderedJsonStringify,
-		orderedYamlStringify,
 		replaceFalseWithUndefined,
 		type Value
 	} from '$lib/utils'
+	import { orderedYamlStringify } from '$lib/yamlUtils'
 	import type { Script } from '$lib/gen'
 
 	type DiffData = {

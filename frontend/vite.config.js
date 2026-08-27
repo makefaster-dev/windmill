@@ -218,7 +218,26 @@ const config = {
 				// which makes the *chunk* graph cyclic where the module graph is not, and
 				// modules then evaluate against uninitialized bindings. See
 				// docs/frontend-import-cycles.md.
-				advancedChunks: { groups: [{ name: 'gen', test: /[\\/]src[\\/]lib[\\/]gen[\\/]/ }] }
+				advancedChunks: {
+					groups: [
+						{ name: 'gen', test: /[\\/]src[\\/]lib[\\/]gen[\\/]/ },
+						// The icon barrel statically imports the whole integration-icon
+						// catalog. Grouped into a shared chunk it drags all of it onto
+						// every page's first load; isolated, only pages that import the
+						// barrel pay for the catalog.
+						{
+							name: 'icons-barrel',
+							test: /[\\/]src[\\/]lib[\\/]components[\\/]icons[\\/](index|store)\.ts/
+						},
+						// Session/store/navigation helpers every route boots through.
+						// Left alone they split into ~15 sub-1KB chunks, and on HTTP/1.1
+						// the request count costs more round trips than the bytes.
+						{
+							name: 'boot-helpers',
+							test: /[\\/]src[\\/]lib[\\/](navigation|serializeParam|logout|logoutKit|logoutRedirect|enterpriseUtils|darkModeVariant|refreshUser|user|storeUtils|stores|toast|forLater|forkParentMemory|workspaceProtectionRules|lastLoginMethod|cookies|consts)\.ts$/
+						}
+					]
+				}
 			}
 		}
 	},
