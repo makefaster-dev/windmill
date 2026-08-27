@@ -27,7 +27,10 @@ const config = {
 						// default options are shown
 						pages: 'build',
 						assets: 'build',
-						fallback: '200.html'
+						fallback: '200.html',
+						// .br/.gz siblings; the API server serves them via content
+						// negotiation (backend/windmill-api/src/static_assets.rs)
+						precompress: true
 					}),
 		// Same for every build of one revision (SvelteKit's Date.now() default is not, so
 		// the per-architecture images disagreed on content-hashed asset filenames and

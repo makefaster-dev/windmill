@@ -7,6 +7,7 @@
  */
 
 use axum::{body::Body, extract::OriginalUri, http::Response, response::IntoResponse};
+use http::HeaderMap;
 
 #[cfg(feature = "static_frontend")]
 use axum::http::header;
@@ -25,23 +26,51 @@ lazy_static::lazy_static! {
     static ref CSP_POLICY: String = std::env::var("CSP_POLICY").unwrap_or_default();
 }
 
+/// Content encodings the client advertised, used to pick a precompressed
+/// `.br`/`.gz` sibling emitted by the frontend build (`precompress: true`).
+#[derive(Clone, Copy, Default)]
+pub struct AcceptedEncodings {
+    br: bool,
+    gzip: bool,
+}
+
+impl AcceptedEncodings {
+    fn from_headers(headers: &HeaderMap) -> Self {
+        let accept = headers
+            .get(http::header::ACCEPT_ENCODING)
+            .and_then(|v| v.to_str().ok())
+            .unwrap_or_default();
+        let has = |enc: &str| {
+            accept.split(',').any(|part| {
+                let mut it = part.split(';');
+                it.next().map(str::trim) == Some(enc)
+                    && !it.any(|p| p.trim().eq_ignore_ascii_case("q=0"))
+            })
+        };
+        AcceptedEncodings { br: has("br"), gzip: has("gzip") }
+    }
+}
+
 // static_handler is a handler that serves static files from the
-pub async fn static_handler(OriginalUri(original_uri): OriginalUri) -> StaticFile {
-    StaticFile(original_uri)
+pub async fn static_handler(
+    OriginalUri(original_uri): OriginalUri,
+    headers: HeaderMap,
+) -> StaticFile {
+    StaticFile(original_uri, AcceptedEncodings::from_headers(&headers))
 }
 
 #[cfg(feature = "static_frontend")]
 #[derive(RustEmbed)]
 #[folder = "${FRONTEND_BUILD_DIR:-../../frontend/build/}"]
 struct Asset;
-pub struct StaticFile(Uri);
+pub struct StaticFile(Uri, AcceptedEncodings);
 
 impl IntoResponse for StaticFile {
     fn into_response(self) -> Response<Body> {
         let original_path = self.0.path();
         let query = self.0.query();
         let path = original_path.trim_start_matches('/');
-        serve_path(path, original_path, query)
+        serve_path(path, original_path, query, self.1)
     }
 }
 
@@ -84,7 +113,12 @@ fn query_has_flag(query: Option<&str>, flag: &str) -> bool {
     query.is_some_and(|q| q.split('&').any(|kv| kv.split('=').next() == Some(flag)))
 }
 
-fn serve_path(path: &str, original_path: &str, query: Option<&str>) -> Response<Body> {
+fn serve_path(
+    path: &str,
+    original_path: &str,
+    query: Option<&str>,
+    enc: AcceptedEncodings,
+) -> Response<Body> {
     if path.starts_with("api/") {
         return Response::builder().status(404).body(Body::empty()).unwrap();
     }
@@ -92,11 +126,31 @@ fn serve_path(path: &str, original_path: &str, query: Option<&str>) -> Response<
     #[cfg(feature = "static_frontend")]
     match Asset::get(path) {
         Some(content) => {
-            let body = Body::from(content.data);
+            // Prefer a precompressed sibling when the client accepts its encoding.
+            // MIME and cache headers stay keyed on the original path.
+            let mut encoding: Option<&'static str> = None;
+            let mut data = content.data;
+            if enc.br {
+                if let Some(compressed) = Asset::get(&format!("{path}.br")) {
+                    data = compressed.data;
+                    encoding = Some("br");
+                }
+            }
+            if encoding.is_none() && enc.gzip {
+                if let Some(compressed) = Asset::get(&format!("{path}.gz")) {
+                    data = compressed.data;
+                    encoding = Some("gzip");
+                }
+            }
+            let body = Body::from(data);
             let mime = mime_guess::from_path(path).first_or_octet_stream();
             let mut res = Response::builder()
                 .header(header::CONTENT_TYPE, mime.as_ref())
-                .header(header::ACCESS_CONTROL_ALLOW_ORIGIN, "*");
+                .header(header::ACCESS_CONTROL_ALLOW_ORIGIN, "*")
+                .header(header::VARY, "Accept-Encoding");
+            if let Some(encoding) = encoding {
+                res = res.header(header::CONTENT_ENCODING, encoding);
+            }
 
             // Add cross-origin isolation headers only for paths that need them
             // (apps_raw editor needs SharedArrayBuffer for TypeScript workers)
@@ -131,12 +185,12 @@ fn serve_path(path: &str, original_path: &str, query: Option<&str>) -> Response<
         None if path.starts_with("_app/") => {
             Response::builder().status(404).body(Body::empty()).unwrap()
         }
-        None => serve_path(TWO_HUNDRED, original_path, query),
+        None => serve_path(TWO_HUNDRED, original_path, query, enc),
     }
 
     #[cfg(not(feature = "static_frontend"))]
     {
-        let _ = (original_path, query); // suppress unused warning
+        let _ = (original_path, query, enc); // suppress unused warning
         Response::builder().status(404).body(Body::empty()).unwrap()
     }
 }
