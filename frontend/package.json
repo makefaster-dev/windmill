@@ -4,7 +4,7 @@
 	"scripts": {
 		"dev": "vite dev",
 		"dev:ui-builder": "mv static/ui_builder static/ui_builder.dev-disabled 2>/dev/null || true ; trap 'mv static/ui_builder.dev-disabled static/ui_builder 2>/dev/null || true' EXIT ; vite dev",
-		"build": "vite build",
+		"build": "vite build && node scripts/inject-boot-preloads.js",
 		"build:utils": "vite build --config sharedUtils/vite.sharedUtils.config.js",
 		"preview": "vite preview",
 		"postinstall": "node -e \"if (require('fs').existsSync('./scripts/untar_ui_builder.js')) { require('child_process').execSync('node ./scripts/untar_ui_builder.js', {stdio: 'inherit'}) }\"",
